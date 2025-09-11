@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>总资产 - 交易记录</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="brand">交易记录</div>
+        <button class="hamburger" id="nav-toggle" aria-label="menu">☰</button>
+        <nav id="nav-links">
+          <a href="/">现货</a>
+          <a href="/bots">合约机器人</a>
+          <a class="active" href="/assets">总资产</a>
+          <a href="/calc">计算器</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h2>新增投入</h2>
+        <form id="invest-form">
+          <div class="grid">
+            <label
+              >USDT 金额
+              <input name="amount_usdt" type="number" step="0.01" />
+            </label>
+            <label
+              >MYR 金额
+              <input name="amount_myr" type="number" step="0.01" />
+            </label>
+            <label
+              >时间 <input name="invested_at" type="datetime-local"
+            /></label>
+          </div>
+          <label>备注 <input name="note" /></label>
+          <button type="submit">保存</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>投入列表</h2>
+        <div id="pair-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>汇总</h2>
+        <div
+          style="
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+          "
+        >
+          <span>USDT→MYR 汇率</span>
+          <input
+            id="fx-rate"
+            type="number"
+            step="0.0001"
+            value="4.50"
+            style="width: 140px"
+          />
+          <button id="recalc" type="button">重新计算</button>
+        </div>
+        <div id="overall"></div>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("nav-toggle").addEventListener("click", () => {
+        document.getElementById("nav-links").classList.toggle("open");
+      });
+
+      document
+        .getElementById("invest-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const invested_at = fd.get("invested_at");
+          const note = fd.get("note");
+          const amount_usdt = parseFloat(fd.get("amount_usdt")) || 0;
+          const amount_myr = parseFloat(fd.get("amount_myr")) || 0;
+          if (!amount_usdt && !amount_myr) {
+            alert("请输入金额");
+            return;
+          }
+          const resp = await fetch("/api/investment_pairs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount_usdt,
+              amount_myr,
+              invested_at: invested_at || undefined,
+              note,
+            }),
+          });
+          if (!resp.ok) {
+            const t = await res.text();
+            alert("保存失败：" + t);
+            return;
+          }
+          e.target.reset();
+          refreshPairs();
+          refreshOverall();
+        });
+
+      document
+        .getElementById("recalc")
+        .addEventListener("click", refreshOverall);
+
+      async function deletePair(id) {
+        if (!confirm("确定删除这条记录吗？")) return;
+        const res = await fetch(`/api/investment_pairs/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          alert("删除失败：" + t);
+          return;
+        }
+        refreshPairs();
+        refreshOverall();
+      }
+
+      async function refreshPairs() {
+        const res = await fetch("/api/investment_pairs");
+        if (!res.ok) return;
+        const data = await res.json();
+        const rows = data
+          .map(
+            (p) => `
+          <tr>
+            <td>${p.amount_usdt.toFixed(2)}</td>
+            <td>${p.amount_myr.toFixed(2)}</td>
+            <td>${new Date(p.invested_at).toLocaleString()}</td>
+            <td>${p.note || ""}</td>
+            <td><button class="btn-danger" onclick="deletePair(${
+              p.id
+            })">删除</button></td>
+          </tr>`
+          )
+          .join("");
+        document.getElementById("pair-list").innerHTML = `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>USDT</th><th>MYR</th><th>时间</th><th>备注</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+
+      async function refreshOverall() {
+        const res = await fetch("/api/summary/overall");
+        if (!res.ok) return;
+        const d = await res.json();
+        const rate =
+          parseFloat(document.getElementById("fx-rate").value || "0") || 0;
+        const totalMYR = d.total_assets_pair.USDT * rate; // 仅将 USDT 折算为 MYR
+        document.getElementById("overall").innerHTML = `
+          <div class="table-wrap">
+            <table class="compact">
+              <tbody>
+                <tr><td>现货持仓成本</td><td>${d.spot_position_cost_value.toFixed(
+                  2
+                )}</td></tr>
+                <tr><td>现货已实现盈亏</td><td>${d.spot_realized_pnl.toFixed(
+                  2
+                )}</td></tr>
+                <tr><td>合约机器人利润合计</td><td>${d.bots_profit.toFixed(
+                  2
+                )}</td></tr>
+                <tr><td>总投入（USDT, MYR）</td><td>${d.invest_usdt.toFixed(
+                  2
+                )}, ${d.total_assets_pair.MYR.toFixed(2)}</td></tr>
+                <tr><td>总资产(USDT)</td><td><strong>${d.total_assets_pair.USDT.toFixed(
+                  2
+                )}</strong></td></tr>
+                <tr><td>按汇率折算 USDT → MYR</td><td><strong>${totalMYR.toFixed(
+                  2
+                )}</strong></td></tr>
+              </tbody>
+            </table>
+          </div>`;
+      }
+
+      refreshPairs();
+      refreshOverall();
+    </script>
+  </body>
+</html>

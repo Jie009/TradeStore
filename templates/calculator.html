@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>目标成本计算器 - 交易记录</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="brand">交易记录</div>
+        <button class="hamburger" id="nav-toggle" aria-label="menu">☰</button>
+        <nav id="nav-links">
+          <a href="/">现货</a>
+          <a href="/bots">合约机器人</a>
+          <a href="/assets">总资产</a>
+          <a href="/calc" class="active">计算器</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h2>目标成本计算器（买入按基础币扣，卖出按计价币）</h2>
+        <div class="grid">
+          <label
+            >选择现货币种
+            <select id="symbol-select"></select>
+          </label>
+          <label
+            >当前持仓数量 Q（币）<input
+              id="Q"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >当前总成本 C（USDT）<input
+              id="C"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >手续费率 f（如 0.001）<input
+              id="f"
+              type="number"
+              step="0.0001"
+              value="0.001"
+          /></label>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #555">
+          当前均价（单币成本）: <span id="cp-now">-</span> USDT/币
+        </div>
+      </section>
+
+      <section class="card" style="display: none">
+        <h3>
+          方式一：给 P 与目标成本 cp_target → 计算所需
+          USDT（A）与净入币（q_real）
+        </h3>
+        <div class="grid">
+          <label
+            >买入价 P（USDT/币）<input
+              id="P1"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >目标成本 cp_target（USDT/币）<input
+              id="cp"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+        </div>
+        <button id="calcA">计算 A 与 q_real</button>
+        <div id="outA"></div>
+      </section>
+
+      <section class="card">
+        <h3>买入价</h3>
+        <div class="grid">
+          <label
+            >花费<input
+              id="A2"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >目标成本<input
+              id="cp2"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+        </div>
+        <button id="calc2">计算买入价</button>
+        <div id="out2"></div>
+      </section>
+
+      <section class="card" style="display: none">
+        <h3>方式三：给 P 与目标成本 cp_target → 直接求净入币 q_real</h3>
+        <div class="grid">
+          <label
+            >买入价 P（USDT/币）<input
+              id="P3"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >目标成本 cp_target（USDT/币）<input
+              id="cp3"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+        </div>
+        <button id="calc3">计算 q_real</button>
+        <div id="out3"></div>
+      </section>
+
+      <section class="card">
+        <h3>
+          买入价与所需USDT
+        </h3>
+        <div class="grid">
+          <label
+            >净入币<input
+              id="q4"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+          <label
+            >目标成本<input
+              id="cp4"
+              type="number"
+              step="0.0000001"
+              value="0"
+          /></label>
+        </div>
+        <button id="calc4">计算买入价与所需 USDT</button>
+        <div id="out4"></div>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("nav-toggle").addEventListener("click", () => {
+        document.getElementById("nav-links").classList.toggle("open");
+      });
+
+      function readBase(cpId = "cp") {
+        const Q = parseFloat(document.getElementById("Q").value || "0");
+        const C = parseFloat(document.getElementById("C").value || "0");
+        const f = parseFloat(document.getElementById("f").value || "0");
+        const cp = parseFloat(document.getElementById(cpId).value || "0");
+        return { Q, C, f, cp };
+      }
+
+      function fmt(x, n = 7) {
+        return Number.isFinite(x) ? x.toFixed(n) : "NaN";
+      }
+
+      async function loadSymbolSummary() {
+        try {
+          const res = await fetch("/api/summary/spot");
+          if (!res.ok) return;
+          const data = await res.json();
+          const sel = document.getElementById("symbol-select");
+          sel.innerHTML = "";
+          for (const s of data.symbols) {
+            const opt = document.createElement("option");
+            opt.value = s.symbol;
+            opt.textContent = s.symbol;
+            opt.dataset.Q = s.position_quantity;
+            opt.dataset.C = s.position_cost_value; // C = avg_cost * Q
+            opt.dataset.AVG = s.average_cost;
+            sel.appendChild(opt);
+          }
+          if (sel.options.length > 0) {
+            sel.selectedIndex = 0;
+            applySelectedSymbol();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      function applySelectedSymbol() {
+        const sel = document.getElementById("symbol-select");
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt) return;
+        const Q = parseFloat(opt.dataset.Q || "0");
+        const C = parseFloat(opt.dataset.C || "0");
+        const AVG = parseFloat(opt.dataset.AVG || "0");
+        document.getElementById("Q").value = fmt(Q);
+        document.getElementById("C").value = fmt(C);
+        document.getElementById("cp-now").innerText = fmt(AVG);
+      }
+
+      document
+        .getElementById("symbol-select")
+        .addEventListener("change", applySelectedSymbol);
+
+      // 二：给 A, cp_target -> 解 P
+      document.getElementById("calc2").addEventListener("click", () => {
+        const { Q, C, f } = readBase("cp2");
+        const cp = parseFloat(document.getElementById("cp2").value || "0");
+        const A = parseFloat(document.getElementById("A2").value || "0");
+        const numer = cp * A * (1 - f);
+        const denom = C + A - cp * Q;
+        let html = "";
+        if (denom === 0) {
+          html = "无解：分母为 0";
+        } else {
+          const P = numer / denom;
+          html = `需要买入价 P=${fmt(P, 7)} USDT/币。`;
+        }
+        document.getElementById("out2").innerText = html;
+      });
+
+      // 四：给 q_real, cp_target -> 解 P 与 A
+      document.getElementById("calc4").addEventListener("click", () => {
+        const { Q, C, f } = readBase("cp4");
+        const cp = parseFloat(document.getElementById("cp4").value || "0");
+        const q_real = parseFloat(document.getElementById("q4").value || "0");
+        let html = "";
+        if (q_real <= 0) {
+          html = "请输入大于 0 的净入币 q_real";
+        } else {
+          const P = ((1 - f) * (cp * (Q + q_real) - C)) / q_real;
+          const A = (q_real * P) / (1 - f);
+          html = `需要买入价 P=${fmt(P, 7)} USDT/币；对应花费 A=${fmt(
+            A,
+            7
+          )} USDT。`;
+        }
+        document.getElementById("out4").innerText = html;
+      });
+
+      loadSymbolSummary();
+    </script>
+  </body>
+</html>

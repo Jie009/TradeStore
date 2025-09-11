@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>合约机器人 - 交易记录</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="brand">交易记录</div>
+        <button class="hamburger" id="nav-toggle" aria-label="menu">☰</button>
+        <nav id="nav-links">
+          <a href="/">现货</a>
+          <a href="/bots" class="active">合约机器人</a>
+          <a href="/assets">总资产</a>
+          <a href="/calc">计算器</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h2>合约机器人</h2>
+        <form id="bot-form">
+          <div class="grid">
+            <label
+              >币种
+              <div style="display: flex; gap: 8px; align-items: center">
+                <select id="symbol-select" name="symbol"></select>
+                <input id="symbol-input" placeholder="新增币种 如 BTCUSDT" />
+                <button type="button" id="add-symbol">添加</button>
+              </div>
+            </label>
+            <label
+              >利润
+              <input name="profit" type="number" step="0.0000001" required
+            /></label>
+            <label>时间 <input name="closed_at" type="datetime-local" /></label>
+          </div>
+          <label>备注 <input name="note" /></label>
+          <button type="submit">保存</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>合约机器人汇总</h2>
+        <div id="bots-summary"></div>
+      </section>
+
+      <section class="card">
+        <h2>历史记录</h2>
+        <div id="bot-list"></div>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("nav-toggle").addEventListener("click", () => {
+        document.getElementById("nav-links").classList.toggle("open");
+      });
+
+      async function loadSymbols() {
+        const res = await fetch("/api/symbols");
+        if (!res.ok) return;
+        const list = await res.json();
+        const sel = document.getElementById("symbol-select");
+        sel.innerHTML = "";
+        for (const s of list) {
+          const opt = document.createElement("option");
+          opt.value = s.symbol;
+          opt.textContent = s.symbol;
+          sel.appendChild(opt);
+        }
+        if (sel.options.length > 0) sel.selectedIndex = 0;
+      }
+
+      document
+        .getElementById("add-symbol")
+        .addEventListener("click", async () => {
+          const val = (
+            document.getElementById("symbol-input").value || ""
+          ).trim();
+          if (!val) return;
+          try {
+            const res = await fetch("/api/symbols", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: val }),
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              alert("添加币种失败：" + t);
+              return;
+            }
+            document.getElementById("symbol-input").value = "";
+            await loadSymbols();
+            document.getElementById("symbol-select").value = val.toUpperCase();
+          } catch (e) {
+            alert("网络错误：" + e.message);
+          }
+        });
+
+      async function deleteBot(id) {
+        if (!confirm("确定删除这条记录吗？")) return;
+        const res = await fetch(`/api/contract_bots/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          alert("删除失败：" + t);
+          return;
+        }
+        refreshBots();
+        refreshBotsSummary();
+      }
+
+      document
+        .getElementById("bot-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const payload = Object.fromEntries(fd.entries());
+          if (!payload.closed_at) delete payload.closed_at;
+          payload.profit = parseFloat(payload.profit);
+          try {
+            const res = await fetch("/api/contract_bots", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              alert("保存失败：" + t);
+              return;
+            }
+            e.target.reset();
+            refreshBots();
+            refreshBotsSummary();
+          } catch (e) {
+            alert("网络错误：" + e.message);
+          }
+        });
+
+      async function refreshBots() {
+        try {
+          const res = await fetch("/api/contract_bots");
+          if (!res.ok) throw new Error("加载机器人失败");
+          const data = await res.json();
+          const rows = data
+            .map(
+              (b) => `
+            <tr>
+              <td>${b.symbol}</td>
+              <td>${b.profit.toFixed(2)}</td>
+              <td>${new Date(b.closed_at).toLocaleString()}</td>
+              <td>${b.note || ""}</td>
+              <td><button class="btn-danger" onclick="deleteBot(${
+                b.id
+              })">删除</button></td>
+            </tr>
+          `
+            )
+            .join("");
+          document.getElementById("bot-list").innerHTML = `
+            <div class=\"table-wrap\"> 
+              <table>
+                <thead><tr><th>币种</th><th>利润</th><th>时间</th><th>备注</th><th></th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function refreshBotsSummary() {
+        try {
+          const res = await fetch("/api/summary/bots");
+          if (!res.ok) throw new Error("加载汇总失败");
+          const data = await res.json();
+          const rows = data.by_symbol
+            .map(
+              ([sym, p]) => `
+            <tr><td>${sym}</td><td>${p.toFixed(2)}</td></tr>
+          `
+            )
+            .join("");
+          document.getElementById("bots-summary").innerHTML = `
+            <div class="table-wrap">
+              <table class="compact">
+                <thead><tr><th>币种</th><th>利润</th></tr></thead>
+                <tbody>${rows}</tbody>
+                <tfoot><tr><td>合计</td><td>${data.total_profit.toFixed(
+                  2
+                )}</td></tr></tfoot>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      loadSymbols();
+      refreshBotsSummary();
+      refreshBots();
+    </script>
+  </body>
+</html>

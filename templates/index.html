@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>交易记录</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="brand">交易记录</div>
+        <button class="hamburger" id="nav-toggle" aria-label="menu">☰</button>
+        <nav id="nav-links">
+          <a href="/" class="active">现货</a>
+          <a href="/bots">合约机器人</a>
+          <a href="/assets">总资产</a>
+          <a href="/calc">计算器</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h2>新增现货交易</h2>
+        <form id="spot-form">
+          <div class="grid">
+            <label
+              >币种
+              <div style="display: flex; gap: 8px; align-items: center">
+                <select id="symbol-select" name="symbol"></select>
+                <input id="symbol-input" placeholder="新增币种 如 BTCUSDT" />
+                <button type="button" id="add-symbol">添加</button>
+              </div>
+            </label>
+            <label
+              >方向
+              <select name="side">
+                <option>BUY</option>
+                <option>SELL</option>
+              </select>
+            </label>
+
+            <label>
+              输入方式
+              <select id="amount-mode">
+                <option value="quantity">按成交量</option>
+                <option value="amount">成交额</option>
+              </select>
+            </label>
+
+            <label id="quantity-wrap"
+              >成交量
+              <input name="quantity" type="number" step="0.0000001" />
+            </label>
+            <label id="amount-wrap" style="display: none"
+              >成交额(计价币)
+              <input name="amount_quote" type="number" step="0.0000001" />
+            </label>
+
+            <label
+              >价格 <input name="price" type="number" step="0.0000001" required
+            /></label>
+
+            <label>
+              手续费模式
+              <select name="fee_mode" id="fee-mode">
+                <option value="taker">taker(0.1%)</option>
+                <option value="maker">maker(0.1%)</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label id="fee-wrap" style="display: none"
+              >手续费（自动/自定义）
+              <input name="fee" type="number" step="0.0000001" />
+            </label>
+
+            <label>时间 <input name="traded_at" type="datetime-local" /></label>
+          </div>
+          <label>备注 <input name="note" /></label>
+          <button type="submit">保存</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>现货汇总</h2>
+        <div id="spot-summary"></div>
+      </section>
+
+      <section class="card">
+        <h2>现货记录</h2>
+        <div id="spot-trades"></div>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("nav-toggle").addEventListener("click", () => {
+        document.getElementById("nav-links").classList.toggle("open");
+      });
+
+      function toggleFee() {
+        const mode = document.getElementById("fee-mode").value;
+        document.getElementById("fee-wrap").style.display =
+          mode === "custom" ? "" : "none";
+      }
+      document.getElementById("fee-mode").addEventListener("change", toggleFee);
+
+      function toggleAmountMode() {
+        const mode = document.getElementById("amount-mode").value;
+        document.getElementById("quantity-wrap").style.display =
+          mode === "quantity" ? "" : "none";
+        document.getElementById("amount-wrap").style.display =
+          mode === "amount" ? "" : "none";
+      }
+      document
+        .getElementById("amount-mode")
+        .addEventListener("change", toggleAmountMode);
+
+      async function loadSymbols() {
+        try {
+          const res = await fetch("/api/symbols");
+          if (!res.ok) throw new Error("加载币种失败");
+          const list = await res.json();
+          const sel = document.getElementById("symbol-select");
+          sel.innerHTML = "";
+          for (const s of list) {
+            const opt = document.createElement("option");
+            opt.value = s.symbol;
+            opt.textContent = s.symbol;
+            sel.appendChild(opt);
+          }
+          if (sel.options.length > 0) {
+            sel.selectedIndex = 0;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      document
+        .getElementById("add-symbol")
+        .addEventListener("click", async () => {
+          const val = (
+            document.getElementById("symbol-input").value || ""
+          ).trim();
+          if (!val) return;
+          try {
+            const res = await fetch("/api/symbols", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: val }),
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              alert("添加币种失败：" + t);
+              return;
+            }
+            document.getElementById("symbol-input").value = "";
+            await loadSymbols();
+            document.getElementById("symbol-select").value = val.toUpperCase();
+          } catch (e) {
+            alert("网络错误：" + e.message);
+          }
+        });
+
+      async function deleteTrade(id) {
+        if (!confirm("确定删除这条记录吗？")) return;
+        const res = await fetch(`/api/spot_trades/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const t = await res.text();
+          alert("删除失败：" + t);
+          return;
+        }
+        await refreshTrades();
+        await refreshSummary();
+      }
+
+      async function refreshTrades() {
+        try {
+          const res = await fetch("/api/spot_trades");
+          if (!res.ok) throw new Error("加载记录失败");
+          const data = await res.json();
+          const rows = data
+            .sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at))
+            .map(
+              (r) => `
+            <tr>
+              <td>${new Date(r.traded_at).toLocaleString()}</td>
+              <td>${r.symbol}</td>
+              <td>${r.side}</td>
+              <td>${r.quantity.toFixed(7)}</td>
+              <td>${r.price.toFixed(7)}</td>
+              <td>${r.fee.toFixed(7)} (${r.fee_currency})</td>
+              <td>${r.note || ""}</td>
+              <td><button class=\"btn-danger\" onclick=\"deleteTrade(${
+                r.id
+              })\">删除</button></td>
+            </tr>
+          `
+            )
+            .join("");
+          document.getElementById("spot-trades").innerHTML = `
+            <div class=\"table-wrap\"> 
+              <table>
+                <thead>
+                  <tr><th>时间</th><th>币种</th><th>方向</th><th>成交量</th><th>价格</th><th>手续费</th><th>备注</th><th></th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function refreshSummary() {
+        try {
+          const res = await fetch("/api/summary/spot");
+          if (!res.ok) throw new Error("加载汇总失败");
+          const data = await res.json();
+          const rows = data.symbols
+            .map(
+              (s) => `
+			<tr>
+				<td>${s.symbol}</td>
+				<td>${s.position_quantity.toFixed(7)}</td>
+				<td>${s.average_cost.toFixed(7)}</td>
+				<td>${s.position_cost_value.toFixed(2)}</td>
+				<td>${s.realized_pnl.toFixed(2)}</td>
+				<td>${s.last_trade_at ? new Date(s.last_trade_at).toLocaleString() : ""}</td>
+			</tr>`
+            )
+            .join("");
+          document.getElementById("spot-summary").innerHTML = `
+            <div class=\"table-wrap\"> 
+			<table class=\"compact\"> 
+				<thead><tr><th>币种</th><th>持仓数量</th><th>均价(单币成本)</th><th>持仓成本</th><th>已实现盈亏</th><th>最近交易</th></tr></thead>
+				<tbody>${rows}</tbody>
+				<tfoot><tr><td>合计</td><td></td><td></td><td>${data.total_position_cost_value.toFixed(
+          2
+        )}</td><td>${data.total_realized_pnl.toFixed(
+            2
+          )}</td><td></td></tr></tfoot>
+			</table>
+            </div>`;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      toggleAmountMode();
+      toggleFee();
+      loadSymbols();
+      refreshSummary();
+      refreshTrades();
+    </script>
+  </body>
+</html>

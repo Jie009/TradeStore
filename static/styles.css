@@ -1,0 +1,48 @@
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "PingFang SC", "Microsoft Yahei", sans-serif; margin: 0; background: #f7f7f8; color: #111; }
+.container { max-width: 980px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 12px 0 16px; }
+.card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+h2 { font-size: 16px; margin: 6px 0 12px; }
+label { display: block; font-size: 12px; margin-bottom: 10px; }
+input, select, button { width: 100%; padding: 12px; font-size: 16px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+button { background: #111; color: #fff; border: none; border-radius: 10px; margin-top: 6px; cursor: pointer; }
+button:active { opacity: 0.9; }
+.btn-danger { background: #d93025; }
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; min-width: 720px; }
+th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; white-space: nowrap; }
+thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
+.compact th, .compact td { font-size: 13px; padding: 8px; }
+
+/* Navbar */
+.nav { position: sticky; top: 0; z-index: 100; background: #ffffffcc; backdrop-filter: saturate(180%) blur(8px); border-bottom: 1px solid #eee; }
+.nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 980px; margin: 0 auto; padding: 8px 16px; position: relative; }
+.brand { font-weight: 700; }
+nav a { margin-left: 12px; text-decoration: none; color: #111; padding: 8px 10px; border-radius: 8px; }
+nav a.active, nav a:hover { background: #f0f0f0; }
+.hamburger { display: none; background: transparent; color: #111; font-size: 22px; width: 44px; height: 44px; border-radius: 8px; }
+@media (max-width: 720px) {
+	/* Full-width vertical sheet */
+	nav { display: none; position: fixed; left: 0; right: 0; top: 56px; background: #fff; padding: 0; border-top: 1px solid #eee; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 120; }
+	nav.open { display: block; }
+	nav a { display: block; margin: 0; padding: 16px 18px; border-radius: 0; border-top: 1px solid #f2f2f2; font-size: 16px; }
+	nav a:first-child { border-top: none; }
+	.hamburger { display: inline-block; }
+}
+
+/* Mobile table optimizations */
+@media (max-width: 560px) {
+	table { min-width: auto; table-layout: fixed; }
+	th, td { white-space: normal; word-break: break-word; font-size: 12px; padding: 6px; }
+	/* Hide trailing less-important columns (6th, 7th, 8th) for narrow screens */
+	.table-wrap table thead th:nth-child(6),
+	.table-wrap table tbody td:nth-child(6),
+	.table-wrap table thead th:nth-child(7),
+	.table-wrap table tbody td:nth-child(7),
+	.table-wrap table thead th:nth-child(8),
+	.table-wrap table tbody td:nth-child(8) { display: none; }
+}
