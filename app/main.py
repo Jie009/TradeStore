@@ -369,37 +369,33 @@ def delete_investment_pair(pair_id: int, session=Depends(get_session)):
 
 @app.get("/api/summary/overall")
 def overall_summary(session=Depends(get_session)):
-    # spot realized pnl + position cost value (USDT侧)
+    # spot realized pnl only (不把持仓成本计入总资产)
     spot_rows = session.exec(select(SpotTrade)).all()
     spot_states = compute_spot_summary(spot_rows)
-    total_position_cost_value = sum(
-        s.average_cost * s.quantity for s in spot_states.values()
-    )
     total_realized_pnl = sum(s.realized_pnl for s in spot_states.values())
+
     # bots profits (USDT侧)
     bot_total = sum(r.profit for r in session.exec(select(ContractBot)).all())
+
     # investments (single)
     invests = session.exec(select(Investment)).all()
     usdt_invest_single = sum(i.amount for i in invests if i.currency.upper() == "USDT")
     myr_invest = sum(i.amount for i in invests if i.currency.upper() == "MYR")
+
     # pairs
     pairs = session.exec(select(InvestmentPair)).all()
     pair_usdt = sum(p.amount_usdt for p in pairs)
     pair_myr = sum(p.amount_myr for p in pairs)
-    # totals without conversion
-    pair_usdt_total = (
-        total_position_cost_value
-        + total_realized_pnl
-        + bot_total
-        + usdt_invest_single
-        + pair_usdt
-    )
-    pair_myr_total = myr_invest + pair_myr
+
+    # totals without conversion: 仅 总投入(USDT) + 机器人利润 + 现货已实现盈亏
+    invest_usdt_total = usdt_invest_single + pair_usdt
+    invest_myr_total = myr_invest + pair_myr
+    pair_usdt_total = invest_usdt_total + bot_total + total_realized_pnl
+
     return {
-        "spot_position_cost_value": total_position_cost_value,
         "spot_realized_pnl": total_realized_pnl,
         "bots_profit": bot_total,
-        "invest_usdt": usdt_invest_single + pair_usdt,
-        "invest_myr": myr_invest + pair_myr,
-        "total_assets_pair": {"USDT": pair_usdt_total, "MYR": pair_myr_total},
+        "invest_usdt": invest_usdt_total,
+        "invest_myr": invest_myr_total,
+        "total_assets_pair": {"USDT": pair_usdt_total, "MYR": invest_myr_total},
     }
