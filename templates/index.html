@@ -248,11 +248,88 @@
         }
       }
 
+      function setDefaultTimeNow() {
+        const input = document.querySelector('input[name="traded_at"]');
+        if (!input) return;
+        if (!input.value) {
+          const now = new Date();
+          const tzoffset = now.getTimezoneOffset() * 60000;
+          const localISO = new Date(now - tzoffset).toISOString().slice(0, 16);
+          input.value = localISO;
+        }
+      }
+
+      document
+        .getElementById("spot-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          const symbol = document.getElementById("symbol-select").value;
+          const side = form.querySelector('[name="side"]').value;
+          const price = parseFloat(
+            form.querySelector('[name="price"]').value || "0"
+          );
+          const mode = document.getElementById("amount-mode").value;
+          const feeMode = document.getElementById("fee-mode").value;
+          const note = form.querySelector('[name="note"]').value || "";
+          const tradedAt = form.querySelector('[name="traded_at"]').value;
+
+          let quantity = null;
+          let amount_quote = null;
+          if (mode === "amount") {
+            const amt = form.querySelector('[name="amount_quote"]').value;
+            amount_quote = amt ? parseFloat(amt) : null;
+          } else {
+            const qty = form.querySelector('[name="quantity"]').value;
+            quantity = qty ? parseFloat(qty) : null;
+          }
+
+          let fee = null;
+          if (feeMode === "custom") {
+            const f = form.querySelector('[name="fee"]').value;
+            fee = f ? parseFloat(f) : null;
+          }
+
+          const payload = {
+            symbol,
+            side,
+            quantity,
+            amount_quote,
+            price,
+            fee,
+            traded_at: tradedAt ? new Date(tradedAt).toISOString() : null,
+            note,
+          };
+
+          try {
+            const res = await fetch("/api/spot_trades", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              alert("保存失败：" + t);
+              return;
+            }
+            // 清空部分输入，刷新列表
+            form.querySelector('[name="quantity"]').value = "";
+            form.querySelector('[name="amount_quote"]').value = "";
+            form.querySelector('[name="fee"]').value = "";
+            // 价格和时间通常保留，方便连续输入
+            await refreshTrades();
+            await refreshSummary();
+          } catch (err) {
+            alert("网络错误：" + err.message);
+          }
+        });
+
       toggleAmountMode();
       toggleFee();
       loadSymbols();
       refreshSummary();
       refreshTrades();
+      setDefaultTimeNow();
     </script>
   </body>
 </html>
