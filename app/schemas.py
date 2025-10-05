@@ -81,6 +81,10 @@ class SpotSymbolSummary(BaseModel):
     position_cost_value: float
     realized_pnl: float
     last_trade_at: Optional[datetime]
+    last_buy_price: float
+    source_price: float
+    total_gross_profit: float
+    cost_price: float
 
 
 class SpotOverallSummary(BaseModel):

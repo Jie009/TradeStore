@@ -183,7 +183,7 @@
             .sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at))
             .map(
               (r) => `
-            <tr>
+            <tr class="${r.side.toUpperCase() === 'BUY' ? 'trade-buy' : 'trade-sell'}">
               <td>${new Date(r.traded_at).toLocaleString()}</td>
               <td>${r.symbol}</td>
               <td>${r.side}</td>
@@ -199,7 +199,7 @@
             )
             .join("");
           document.getElementById("spot-trades").innerHTML = `
-            <div class=\"table-wrap\"> 
+            <div class="table-wrap">
               <table>
                 <thead>
                   <tr><th>时间</th><th>币种</th><th>方向</th><th>成交量</th><th>价格</th><th>手续费</th><th>备注</th><th></th></tr>
@@ -224,24 +224,44 @@
 			<tr>
 				<td>${s.symbol}</td>
 				<td>${s.position_quantity.toFixed(7)}</td>
-				<td>${s.average_cost.toFixed(7)}</td>
-				<td>${s.position_cost_value.toFixed(2)}</td>
+				<td>${s.last_buy_price.toFixed(7)}</td>
+				<td>${s.source_price.toFixed(2)}</td>
+				<td>${s.total_gross_profit.toFixed(2)}</td>
+				<td>${s.cost_price.toFixed(7)}</td>
 				<td>${s.realized_pnl.toFixed(2)}</td>
 				<td>${s.last_trade_at ? new Date(s.last_trade_at).toLocaleString() : ""}</td>
 			</tr>`
             )
             .join("");
           document.getElementById("spot-summary").innerHTML = `
-            <div class=\"table-wrap\"> 
-			<table class=\"compact\"> 
-				<thead><tr><th>币种</th><th>持仓数量</th><th>均价(单币成本)</th><th>持仓成本</th><th>已实现盈亏</th><th>最近交易</th></tr></thead>
-				<tbody>${rows}</tbody>
-				<tfoot><tr><td>合计</td><td></td><td></td><td>${data.total_position_cost_value.toFixed(
-          2
-        )}</td><td>${data.total_realized_pnl.toFixed(
-            2
-          )}</td><td></td></tr></tfoot>
-			</table>
+            <div class="table-wrap">
+              <table class="compact">
+                <thead>
+                  <tr>
+                    <th>币种</th>
+                    <th>持仓数量</th>
+                    <th>最近买价</th>
+                    <th>源头价</th>
+                    <th>总毛利率</th>
+                    <th>成本价</th>
+                    <th>已实现盈亏</th>
+                    <th>最近交易</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                  <tr>
+                    <td>合计</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>${data.total_realized_pnl.toFixed(2)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>`;
         } catch (e) {
           console.error(e);

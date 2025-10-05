@@ -12,11 +12,55 @@ button { background: #111; color: #fff; border: none; border-radius: 10px; margi
 button:active { opacity: 0.9; }
 .btn-danger { background: #d93025; }
 
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; min-width: 720px; }
-th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; white-space: nowrap; }
-thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
-.compact th, .compact td { font-size: 13px; padding: 8px; }
+.table-wrap {
+  overflow-x: auto !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  width: 100%;
+  display: block;
+}
+.table-wrap table {
+  width: 100%;
+  min-width: 900px !important;
+  border-collapse: collapse;
+  display: table;
+}
+th, td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+thead th {
+  background: #fafafa;
+  font-weight: 600;
+  border-bottom: 2px solid #e8e8e8;
+}
+tbody tr:hover {
+  background: #f9f9f9;
+}
+.trade-buy {
+  background: #f0fdf4 !important;
+}
+.trade-buy:hover {
+  background: #dcfce7 !important;
+}
+.trade-sell {
+  background: #fef2f2 !important;
+}
+.trade-sell:hover {
+  background: #fee2e2 !important;
+}
+tfoot td {
+  font-weight: 600;
+  background: #fafafa;
+  border-top: 2px solid #e8e8e8;
+  border-bottom: none;
+}
+.compact th, .compact td { font-size: 13px; padding: 10px; }
 
 /* Navbar */
 .nav { position: sticky; top: 0; z-index: 100; background: #ffffffcc; backdrop-filter: saturate(180%) blur(8px); border-bottom: 1px solid #eee; }
@@ -36,13 +80,5 @@ nav a.active, nav a:hover { background: #f0f0f0; }
 
 /* Mobile table optimizations */
 @media (max-width: 560px) {
-	table { min-width: auto; table-layout: fixed; }
-	th, td { white-space: normal; word-break: break-word; font-size: 12px; padding: 6px; }
-	/* Hide trailing less-important columns (6th, 7th, 8th) for narrow screens */
-	.table-wrap table thead th:nth-child(6),
-	.table-wrap table tbody td:nth-child(6),
-	.table-wrap table thead th:nth-child(7),
-	.table-wrap table tbody td:nth-child(7),
-	.table-wrap table thead th:nth-child(8),
-	.table-wrap table tbody td:nth-child(8) { display: none; }
+	th, td { font-size: 12px; padding: 6px; }
 }

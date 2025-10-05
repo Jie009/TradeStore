@@ -259,6 +259,10 @@ def summary_spot(
                 position_cost_value=cost_value,
                 realized_pnl=s.realized_pnl,
                 last_trade_at=s.last_trade_at,
+                last_buy_price=s.last_buy_price,
+                source_price=s.source_price,
+                total_gross_profit=s.total_gross_profit,
+                cost_price=s.cost_price,
             )
         )
         total_cost_value += cost_value
