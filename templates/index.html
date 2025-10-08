@@ -205,6 +205,12 @@
             let costPrice = 0;
 
             if (r.side.toUpperCase() === 'BUY') {
+              // 如果之前已经清仓,重新买入时重置状态
+              if (state.quantity <= 0) {
+                state.totalGrossProfit = 0;
+                state.costBasisTotal = 0;
+              }
+
               // 更新最近买价
               state.lastBuyPrice = r.price;
 
@@ -230,7 +236,8 @@
               // 更新持仓
               const avgCost = state.quantity > 0 ? state.costBasisTotal / state.quantity : 0;
               state.quantity -= r.quantity;
-              if (state.quantity < 0) {
+              if (state.quantity <= 0) {
+                // 清仓后重置状态
                 state.quantity = 0;
                 state.costBasisTotal = 0;
               } else {
@@ -239,8 +246,13 @@
             }
 
             // 计算成本价
-            const sourcePrice = state.quantity * state.lastBuyPrice;
-            costPrice = state.quantity > 0 ? (sourcePrice - state.totalGrossProfit) / state.quantity : 0;
+            if (state.quantity > 0) {
+              const sourcePrice = state.quantity * state.lastBuyPrice;
+              costPrice = (sourcePrice - state.totalGrossProfit) / state.quantity;
+            } else {
+              // 清仓后成本价为0
+              costPrice = 0;
+            }
 
             return `
             <tr class="${r.side.toUpperCase() === 'BUY' ? 'trade-buy' : 'trade-sell'}">
