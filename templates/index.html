@@ -179,30 +179,90 @@
           const res = await fetch("/api/spot_trades");
           if (!res.ok) throw new Error("加载记录失败");
           const data = await res.json();
-          const rows = data
-            .sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at))
-            .map(
-              (r) => `
+
+          // 按时间排序并计算每行的毛利率和成本价
+          const sortedData = data.sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at));
+
+          // 维护每个币种的状态
+          const symbolStates = {};
+
+          const rows = sortedData.map((r) => {
+            const symbol = r.symbol;
+            if (!symbolStates[symbol]) {
+              symbolStates[symbol] = {
+                quantity: 0,
+                lastBuyPrice: 0,
+                totalGrossProfit: 0,
+                costBasisTotal: 0
+              };
+            }
+
+            const state = symbolStates[symbol];
+            const fee = r.fee || 0;
+            const feeCurrency = (r.fee_currency || "quote").toLowerCase();
+
+            let grossProfit = 0;
+            let costPrice = 0;
+
+            if (r.side.toUpperCase() === 'BUY') {
+              // 更新最近买价
+              state.lastBuyPrice = r.price;
+
+              // 更新持仓
+              if (feeCurrency === 'base') {
+                const netQty = Math.max(0, r.quantity - fee);
+                const totalQuote = r.quantity * r.price;
+                state.quantity += netQty;
+                state.costBasisTotal += totalQuote;
+              } else {
+                const totalQuote = r.quantity * r.price + fee;
+                state.quantity += r.quantity;
+                state.costBasisTotal += totalQuote;
+              }
+
+              // 买入时毛利率为0
+              grossProfit = 0;
+            } else {
+              // 卖出时计算毛利率
+              grossProfit = (r.price - state.lastBuyPrice) * r.quantity;
+              state.totalGrossProfit += grossProfit;
+
+              // 更新持仓
+              const avgCost = state.quantity > 0 ? state.costBasisTotal / state.quantity : 0;
+              state.quantity -= r.quantity;
+              if (state.quantity < 0) {
+                state.quantity = 0;
+                state.costBasisTotal = 0;
+              } else {
+                state.costBasisTotal -= avgCost * r.quantity;
+              }
+            }
+
+            // 计算成本价
+            const sourcePrice = state.quantity * state.lastBuyPrice;
+            costPrice = state.quantity > 0 ? (sourcePrice - state.totalGrossProfit) / state.quantity : 0;
+
+            return `
             <tr class="${r.side.toUpperCase() === 'BUY' ? 'trade-buy' : 'trade-sell'}">
               <td>${new Date(r.traded_at).toLocaleString()}</td>
               <td>${r.symbol}</td>
               <td>${r.side}</td>
               <td>${r.quantity.toFixed(7)}</td>
               <td>${r.price.toFixed(7)}</td>
+              <td>${grossProfit.toFixed(2)}</td>
+              <td>${costPrice.toFixed(7)}</td>
               <td>${r.fee.toFixed(7)} (${r.fee_currency})</td>
               <td>${r.note || ""}</td>
-              <td><button class=\"btn-danger\" onclick=\"deleteTrade(${
-                r.id
-              })\">删除</button></td>
+              <td><button class=\"btn-danger\" onclick=\"deleteTrade(${r.id})\">删除</button></td>
             </tr>
-          `
-            )
-            .join("");
+          `;
+          }).join("");
+
           document.getElementById("spot-trades").innerHTML = `
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>时间</th><th>币种</th><th>方向</th><th>成交量</th><th>价格</th><th>手续费</th><th>备注</th><th></th></tr>
+                  <tr><th>时间</th><th>币种</th><th>方向</th><th>成交量</th><th>价格</th><th>毛利率</th><th>成本价</th><th>手续费</th><th>备注</th><th></th></tr>
                 </thead>
                 <tbody>${rows}</tbody>
               </table>
